@@ -1,2 +1,7 @@
+<<<<<<< HEAD
 *.csv filter=lfs diff=lfs merge=lfs -text
 *.html filter=lfs diff=lfs merge=lfs -text
+=======
+*.csv filter=lfs diff=lfs merge=lfs -text
+*.html filter=lfs diff=lfs merge=lfs -text
+>>>>>>> 00aebec1be6adf81f0b962dcd472552510c106fe
