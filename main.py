@@ -31,28 +31,58 @@ nfip_loss_r["originalNBDate - Date of the Beginning of the Flood Policy"] = nfip
 nfip_loss_r['mostRecentDateofLoss'] = pd.to_datetime(nfip_loss_r['mostRecentDateofLoss'])
 nfip_loss_r["mostRecentDateofLoss"] = nfip_loss_r['mostRecentDateofLoss'].dt.date
 
-nfip_loss = nfip_loss_r.drop(columns=["state","county","communityName", "id", "censusBlockGroup",
+nfip_loss_r = nfip_loss_r.drop(columns=["state","county","communityName", "id", "censusBlockGroup",
                                       "asOfDate - Effective date on the File","fmaRl - Flood Metigation Assistance repetitive Loss",
                                       "fmaSrl - Flood Metigation Assistance Severe Repetitive Loss ",
                                       "originalConstructionDate"])
 
-nfip_loss['mostRecentDateofLoss'] = pd.to_datetime(nfip_loss["mostRecentDateofLoss"]).dt.strftime('%Y-%m-%d')
+nfip_loss_r['mostRecentDateofLoss'] = pd.to_datetime(nfip_loss_r["mostRecentDateofLoss"]).dt.strftime('%Y-%m-%d')
 
-nfip_loss.rename(columns={'nfipRl - Repetitive Loss of more than 1000 per claim':'RepeatLoss >1000',
+nfip_loss_r.rename(columns={'nfipRl - Repetitive Loss of more than 1000 per claim':'RepeatLoss >1000',
                           'nfipSrl - Severe Repetitive Loss of cumulative claim payments of more than 10000':'CumulativePayments >10000',
                           'originalNBDate - Date of the Beginning of the Flood Policy':'PolicyStartDate'}, inplace=True)
 
-nan_summary = nfip_loss.isna().sum()
+# nfip_loss['zipCode'] = nfip_loss.apply(
+#     lambda row: row['reportedCity'] if pd.notna(row['reportedCity']) and str(row['reportedCity'].isdigit()) 
+#     else row['reportedCity'], axis=1  
+# ) 
+
+# nfip_loss['reportedCity'] = nfip_loss.apply(
+#     lambda row: None if pd.notna(row['reportedCity']) and str(row['reportedCity'].isdigit())
+#     else row['reportedCity'], axis=1
+# )
+
+#Summarizing missing and non-missing entries
+
+summary = pd.DataFrame({
+    'Total Entries' : nfip_loss_r.shape[0],
+    'Non-NaN Count' : nfip_loss_r.notna().sum(),
+    'NaN Count' : nfip_loss_r.isna().sum(),
+    'Percentage Missing' : (nfip_loss_r.isna().sum() / nfip_loss_r.shape[0]) * 100
+})
+
+nfip_loss = nfip_loss_r.dropna(subset=['latitude', 'zipCode'], how='any')
+
+summary = pd.DataFrame({
+    'Total Entries' : nfip_loss.shape[0],
+    'Non-NaN Count' : nfip_loss.notna().sum(),
+    'NaN Count' : nfip_loss.isna().sum(),
+    'Percentage Missing' : (nfip_loss.isna().sum() / nfip_loss.shape[0]) * 100
+})
 
 #nfip_loss['zipCode'] = nfip_loss['zipCode'].astype(int)
 
-print(nan_summary)
+print(summary)
+
+nfip_loss = nfip_loss.reset_index(drop=True)
 
 census_r = pd.read_csv("data/censusdata.csv", index_col=0) 
 
 census = census_r.iloc[2:]
 
-print(census.head())
+nan_summary_census = census.isna().sum()
+
+print(nan_summary_census)
 
 
 
