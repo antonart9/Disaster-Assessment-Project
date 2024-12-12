@@ -42,16 +42,6 @@ nfip_loss_r.rename(columns={'nfipRl - Repetitive Loss of more than 1000 per clai
                           'nfipSrl - Severe Repetitive Loss of cumulative claim payments of more than 10000':'CumulativePayments >10000',
                           'originalNBDate - Date of the Beginning of the Flood Policy':'PolicyStartDate'}, inplace=True)
 
-# nfip_loss['zipCode'] = nfip_loss.apply(
-#     lambda row: row['reportedCity'] if pd.notna(row['reportedCity']) and str(row['reportedCity'].isdigit()) 
-#     else row['reportedCity'], axis=1  
-# ) 
-
-# nfip_loss['reportedCity'] = nfip_loss.apply(
-#     lambda row: None if pd.notna(row['reportedCity']) and str(row['reportedCity'].isdigit())
-#     else row['reportedCity'], axis=1
-# )
-
 #Summarizing missing and non-missing entries
 
 summary = pd.DataFrame({
@@ -70,23 +60,86 @@ summary = pd.DataFrame({
     'Percentage Missing' : (nfip_loss.isna().sum() / nfip_loss.shape[0]) * 100
 })
 
-#nfip_loss['zipCode'] = nfip_loss['zipCode'].astype(int)
+#print(summary)
 
-print(summary)
+nfip_loss = nfip_loss.copy()
+
+nfip_loss['PolicyStartDate'] = pd.to_datetime(nfip_loss['PolicyStartDate'])
+
+nfip_loss['PolicyStartYear'] = nfip_loss['PolicyStartDate'].dt.year
+
+nfip_loss = nfip_loss[(nfip_loss['PolicyStartYear'] >= 2010) & (nfip_loss['PolicyStartYear'] <=2022)]
 
 nfip_loss = nfip_loss.reset_index(drop=True)
+
+print(nfip_loss.head())
 
 census_r = pd.read_csv("data/censusdata.csv", index_col=0) 
 
 census = census_r.iloc[2:]
 
-nan_summary_census = census.isna().sum()
+census = census.copy()
 
-print(nan_summary_census)
+census['zipCode'] = census['Geographic Area Name'].str[-5:]
+
+print(census.head())
+
+nfip_t_claims = nfip_loss.groupby(['zipCode', 'PolicyStartYear'], as_index=False).agg({
+    'totalLosses' : 'sum',
+    'latitude' : 'first',
+    'longitude' : 'first'
+})
+
+nfip_t_claims['latitude'] = nfip_t_claims['latitude'].fillna(0)
+
+nfip_t_claims['longitude'] = nfip_t_claims['longitude'].fillna(0)
+
+nfip_t_claims.rename(columns={'totalLosses' : 'totalClaims'}, inplace=True)
+
+nfip_t_claims['zipCode'] = (nfip_t_claims['zipCode'].astype(int).astype(str).str.zfill(5))
+
+nfip_t_claims['PolicyStartYear'] = nfip_t_claims['PolicyStartYear'].astype(int).astype(str)
+
+print(nfip_t_claims.head())
+
+census_merge = duckdb.query("""
+
+SELECT nfip_t_claims.PolicyStartYear,
+       nfip_t_claims.zipCode,
+       census.Total AS TotalDwellings,
+       nfip_t_claims.latitude,
+       nfip_t_claims.longitude,           
+       nfip_t_claims.totalClaims as TotalFloodClaims
+FROM nfip_t_claims
+LEFT JOIN census 
+ON nfip_t_claims.zipCode = census.zipCode AND nfip_t_claims.PolicyStartYear = census.YEAR  
+
+""").to_df()
+
+census_merge['TotalFloodClaims'] = pd.to_numeric(census_merge['TotalFloodClaims'], errors='coerce')
+
+census_merge['TotalDwellings'] = pd.to_numeric(census_merge['TotalDwellings'], errors='coerce')
+
+census_merge['FloodRisk'] = ((census_merge['TotalFloodClaims'] / census_merge['TotalDwellings'])*100).round(2).astype(str) + '%'
 
 
+print(census_merge.head())
 
+print(census_merge.isna().sum())
 
+# m = folium.Map(location=[37.7749, -95.7129], zoom_start=5)
+
+# for _, row in census_merge.iterrows():
+#     risk_value = float(row['FloodRisk'].strip('%'))
+#     icon_color = 'red' if risk_value > 1.0 else 'green'
+#     folium.Marker(
+#         location=[row['latitude'], row['longitude']],
+#         popup=f"ZIP: {row['zipCode']}<br>Risk: {row['FloodRisk']}",
+#         icon=folium.Icon(color=icon_color)
+#     ).add_to(m)
+
+# m.save("flood_Risk_m.html")
+# webbrowser.open("flood_Risk_m.html")
 
 
 
