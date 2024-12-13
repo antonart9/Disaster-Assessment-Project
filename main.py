@@ -105,7 +105,7 @@ nfip_t_claims['zipCode'] = (nfip_t_claims['zipCode'].astype(int).astype(str).str
 
 nfip_t_claims['PolicyStartYear'] = nfip_t_claims['PolicyStartYear'].astype(int).astype(str)
 
-print(nfip_t_claims.head())
+# print(nfip_t_claims.head()) -- part of the project testing
 
 # Combinning Census Data with Historical Flood Claims Data using DuckDB
 
@@ -144,7 +144,7 @@ census_merge.to_csv(output_file, index=False)
 
 # Generating an interactive Folium Map with Risk Analysis Data
 
-m = folium.Map(location=[37.7749, -95.7129], zoom_start=7)
+m = folium.Map(location=[37.7749, -95.7129], zoom_start=5)
 
 cluster = MarkerCluster().add_to(m)
 
