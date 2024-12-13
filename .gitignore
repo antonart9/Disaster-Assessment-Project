@@ -1,4 +1,6 @@
 data/*.csv
 data/*.txt
+data/censusdata
 *.html
 venv
+results

@@ -1,9 +1,11 @@
 import folium
+from folium.plugins import MarkerCluster
 import pandas as pd
 import numpy as np
 import webbrowser
 import duckdb
 import gdown 
+import os
 
 url  ="https://drive.google.com/file/d/1_2aV0idVYIhufdc-V9A7tZ_xhrqy4OcB/view?usp=drive_link" #Link to the Multiple Loss Properties File w/ GIS from 1977-2024
 output = "data/multipleLossProperties2.csv"
@@ -60,7 +62,7 @@ summary = pd.DataFrame({
     'Percentage Missing' : (nfip_loss.isna().sum() / nfip_loss.shape[0]) * 100
 })
 
-#print(summary)
+#print(summary) -- part of the project testing
 
 nfip_loss = nfip_loss.copy()
 
@@ -72,7 +74,7 @@ nfip_loss = nfip_loss[(nfip_loss['PolicyStartYear'] >= 2010) & (nfip_loss['Polic
 
 nfip_loss = nfip_loss.reset_index(drop=True)
 
-print(nfip_loss.head())
+#print(nfip_loss.head()) -- part of the project testing
 
 census_r = pd.read_csv("data/censusdata.csv", index_col=0) 
 
@@ -82,9 +84,12 @@ census = census.copy()
 
 census['zipCode'] = census['Geographic Area Name'].str[-5:]
 
-print(census.head())
+#print(census.head()) -- part of the project testing
 
-nfip_t_claims = nfip_loss.groupby(['zipCode', 'PolicyStartYear'], as_index=False).agg({
+# Grouping claims by zip code and Policy start year and aggreaging total claims into total losses
+# and using the first coordinate set of the grouped data.
+
+nfip_t_claims = nfip_loss.groupby(['zipCode', 'PolicyStartYear','stateAbbreviation'], as_index=False).agg({
     'totalLosses' : 'sum',
     'latitude' : 'first',
     'longitude' : 'first'
@@ -102,10 +107,13 @@ nfip_t_claims['PolicyStartYear'] = nfip_t_claims['PolicyStartYear'].astype(int).
 
 print(nfip_t_claims.head())
 
+# Combinning Census Data with Historical Flood Claims Data using DuckDB
+
 census_merge = duckdb.query("""
 
 SELECT nfip_t_claims.PolicyStartYear,
        nfip_t_claims.zipCode,
+       nfip_t_claims.stateAbbreviation as State,                     
        census.Total AS TotalDwellings,
        nfip_t_claims.latitude,
        nfip_t_claims.longitude,           
@@ -123,69 +131,38 @@ census_merge['TotalDwellings'] = pd.to_numeric(census_merge['TotalDwellings'], e
 census_merge['FloodRisk'] = ((census_merge['TotalFloodClaims'] / census_merge['TotalDwellings'])*100).round(2).astype(str) + '%'
 
 
-print(census_merge.head())
+#print(census_merge.head()) -- part of the project testing
 
-print(census_merge.isna().sum())
+results_folder = "results"
+output_file = os.path.join(results_folder, "flood_risk_data.csv")
 
-# m = folium.Map(location=[37.7749, -95.7129], zoom_start=5)
+os.makedirs(results_folder, exist_ok=True)
 
-# for _, row in census_merge.iterrows():
-#     risk_value = float(row['FloodRisk'].strip('%'))
-#     icon_color = 'red' if risk_value > 1.0 else 'green'
-#     folium.Marker(
-#         location=[row['latitude'], row['longitude']],
-#         popup=f"ZIP: {row['zipCode']}<br>Risk: {row['FloodRisk']}",
-#         icon=folium.Icon(color=icon_color)
-#     ).add_to(m)
+census_merge.to_csv(output_file, index=False)
 
-# m.save("flood_Risk_m.html")
-# webbrowser.open("flood_Risk_m.html")
+# print(census_merge.isna().sum()) -- part of the project testing
+
+# Generating an interactive Folium Map with Risk Analysis Data
+
+m = folium.Map(location=[37.7749, -95.7129], zoom_start=7)
+
+cluster = MarkerCluster().add_to(m)
+
+for _, row in census_merge.iterrows():
+    folium.Marker (
+        location=[row['latitude'], row['longitude']],
+        popup=f"ZIP: {row['zipCode']}<br>Flood Risk: {row['FloodRisk']}",
+    ).add_to(cluster)
+
+m.save("results/flood_Risk_m.html")
+
+print("The Flood Risk Analysis csv File, and the Flood Risk Map Generated Successfully in the Results Folder")
 
 
 
 
 
 
-#nfip_loss.fillna(0)
-
-#nfip_loss.to_csv('data/nfip_loss_cld.csv', index=False)
-
-#for index, row in nfip_loss.iterrows():
-    #if pd.notnull(row['latitude']) and pd.notnull(row['longitude']):
-       # folium.Marker(
-        #location=[row['latitude'], row['longitude']],
-        #popup=row['reportedCity']
-        #).add_to(m)
-
-#m.save("m.html")
-#webbrowser.open("m.html")
-
-#flds_by_year = duckdb.sql("SELECT YEAR(mostRecentDateofLoss) as year, COUNT(*) AS total_floods FROM nfip_loss GROUP BY YEAR(mostRecentDateofLoss) ORDER BY year; ")
-
-#flds_by_zip = duckdb.sql("SELECT communityIdNumber, stateAbbreviation, COUNT(zipCode) as ZIPcnt, FROM nfip_loss GROUP BY stateAbbreviation, communityIdNumber ORDER BY communityIdNumber;")
-
-#group_coord_querry = """SELECT list([latitude, longitude]) AS coordinate_groups 
-                        #FROM nfip_loss 
-                        #WHERE latitude IS NOT NULL AND longitude IS NOT NULL 
-                        #GROUP BY communityIdNumber;"""
-
-#grouped_com_coords = duckdb.execute(group_coord_querry).fetchall()
-
-#m = folium.Map(location=[37.7749, -122.4194], zoom_start=5)
-
-#for row in grouped_com_coords:
-        #coords = row[0]
-        #folium.Polygon(locations=coords, color="red", 
-                       #weight=2.5, fill=True, fill_opacity=0.5).add_to(m)
-
-#m.save("map.html")
-#webbrowser.open("map.html")
-
-#distinct_states_q = duckdb.sql("SELECT DISTINCT stateAbbreviation AS State, COUNT('nfipRl - Repetitive Loss of more than 1000 per claim') AS RepetitiveClaims FROM nfip_loss GROUP BY stateAbbreviation ORDER BY State;")
-
-#distinct_states = duckdb.execute(distinct_states_q).fetchall()
-
-#print(distinct_states_q)
 
 
 
